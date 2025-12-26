@@ -16,59 +16,78 @@
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; line-height: 1.5; }
     .card { max-width: 720px; margin: 0 auto; border: 1px solid #ddd; border-radius: 14px; padding: 18px; }
-    button, a.btn { display: inline-block; padding: 12px 14px; border-radius: 12px; border: 1px solid #111; background: #111; color: #fff; text-decoration: none; cursor: pointer; }
+    button { padding: 12px 14px; border-radius: 12px; border: 1px solid #111; background: #111; color: #fff; cursor: pointer; }
+    button[disabled] { opacity: .5; cursor: not-allowed; }
     .muted { color: #666; font-size: 14px; }
-    .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
     code { background: #f6f6f6; padding: 2px 6px; border-radius: 6px; }
   </style>
 </head>
 <body>
   <div class="card">
     <h1 style="margin:0 0 10px;">📄 시트 바로가기</h1>
-    <p class="muted" style="margin-top:0;">
-      카톡에서 열렸다면 우측 상단 <code>⋮</code> → <b>기본 브라우저로 열기</b>로 열면 설치가 더 잘 됩니다.
+
+    <p class="muted" id="msg" style="margin-top:0;">
+      설치 버튼이 보이지 않으면 크롬 메뉴(⋮)에서 <b>앱 설치</b> 또는 <b>홈 화면에 추가</b>를 선택하세요.
     </p>
 
-    <div class="row">
-      <a class="btn" id="openBtn" href="#" rel="noopener">지금 시트 열기</a>
-      <button id="installBtn" style="display:none;">홈화면/바탕화면에 추가(설치)</button>
-    </div>
+    <button id="installBtn" disabled style="display:none;">앱 설치하기</button>
 
-    <hr style="border:none;border-top:1px solid #eee;margin:16px 0;">
-
-    <p class="muted" style="margin:0;">
-      iPhone(Safari): 공유 버튼(⬆️) → <b>홈 화면에 추가</b><br/>
-      Android/PC(Chrome/Edge): 위 <b>설치</b> 버튼 또는 브라우저 메뉴의 <b>설치/홈 화면에 추가</b>
+    <p class="muted" style="margin:14px 0 0;">
+      카카오톡/인앱브라우저로 열렸다면 우측 상단 <code>⋮</code> → <b>기본 브라우저로 열기</b>로 열면 설치가 잘 됩니다.
+      <br>
+      iPhone(Safari): 공유 버튼(⬆️) → <b>홈 화면에 추가</b>
     </p>
   </div>
 
   <script>
     const SHEET_URL = "https://docs.google.com/spreadsheets/d/1V8Y2c4bXXZT_6CL5VMzSehld5EVikSqqRk9PaLie8jE/edit?usp=sharing";
 
-    // 버튼 링크
-    document.getElementById("openBtn").href = SHEET_URL;
+    // 1) "설치된 앱(standalone)"으로 실행된 경우 → 바로 시트로 이동
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.matchMedia("(display-mode: fullscreen)").matches ||
+      window.matchMedia("(display-mode: minimal-ui)").matches ||
+      window.navigator.standalone === true; // iOS Safari
 
-    // 서비스워커(필수는 아니지만 설치성/아이콘 표시 등에 도움)
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./service-worker.js");
+    if (isStandalone) {
+      // 앱 아이콘 클릭 → 즉시 시트로
+      location.replace(SHEET_URL);
     }
 
-    // Android/PC에서 설치 프롬프트 잡기
+    // 2) 설치에 필요한 서비스워커 등록
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./service-worker.js", { scope: "./" });
+    }
+
+    // 3) 설치 버튼: beforeinstallprompt 잡아서 "앱 설치"만 노출
     let deferredPrompt = null;
     const installBtn = document.getElementById("installBtn");
+    const msg = document.getElementById("msg");
 
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
       deferredPrompt = e;
+
       installBtn.style.display = "inline-block";
+      installBtn.disabled = false;
+      msg.innerHTML = "아래 버튼을 눌러 <b>앱 설치</b>를 진행하세요.";
     });
 
     installBtn.addEventListener("click", async () => {
       if (!deferredPrompt) return;
+
       deferredPrompt.prompt();
       await deferredPrompt.userChoice;
+
       deferredPrompt = null;
-      installBtn.style.display = "none";
+      installBtn.disabled = true;
+      msg.textContent = "설치가 완료되면 바탕화면/앱 목록의 아이콘으로 실행하세요.";
+    });
+
+    // (선택) 이미 설치된 경우 메시지 정리
+    window.addEventListener("appinstalled", () => {
+      installBtn.disabled = true;
+      msg.textContent = "설치 완료! 바탕화면/앱 목록의 아이콘으로 실행하면 시트로 바로 연결됩니다.";
     });
   </script>
 </body>
